@@ -3,19 +3,17 @@ from models import VapiMessage
 
 async def route_event(msg: VapiMessage) -> dict:
     handlers = {
-        "call-started":  _handle_call_started,
-        "end-of-call-report":    _handle_call_ended,
-        "transcript":    _handle_transcript,
-        "function-call": _handle_function_call,
+        "call-started":       _handle_call_started,
+        "end-of-call-report": _handle_end_of_call_report,
+        "transcript":         _handle_transcript,
+        "function-call":      _handle_function_call,
+        "status-update":      _handle_status_update,
     }
     handler = handlers.get(msg.type)
     if handler is None:
         print(f"[vapi_handlers] Unknown event type: {msg.type}")
         return {"handled": False, "type": msg.type}
     return await handler(msg)
-async def _handle_status_update(msg: VapiMessage) -> dict:
-    print(f"[vapi_handlers] status-update: {msg.call.id}")
-    return {"handled": True, "type": "status-update"}
 
 
 async def _handle_call_started(msg: VapiMessage) -> dict:
@@ -35,18 +33,18 @@ async def _handle_call_started(msg: VapiMessage) -> dict:
     return {"handled": True, "type": "call-started", "db_call_id": db_id}
 
 
-async def _handle_call_ended(msg: VapiMessage) -> dict:
+async def _handle_end_of_call_report(msg: VapiMessage) -> dict:
     import qualification
 
     call_id_str = msg.call.id
     db_call_id = msg.call.metadata.get("db_call_id")
     ended_reason = msg.endedReason or ""
 
-    print(f"[vapi_handlers] Handled: call-ended for call {call_id_str}, reason={ended_reason}")
+    print(f"[vapi_handlers] Handled: end-of-call-report for call {call_id_str}, reason={ended_reason}")
 
     if db_call_id is None:
         print(f"[vapi_handlers] No db_call_id in metadata for call {call_id_str}, skipping state update")
-        return {"handled": True, "type": "call-ended", "skipped": True}
+        return {"handled": True, "type": "end-of-call-report", "skipped": True}
 
     db_call_id = int(db_call_id)
 
@@ -54,17 +52,14 @@ async def _handle_call_ended(msg: VapiMessage) -> dict:
     if ended_reason in no_answer_reasons:
         call_state.schedule_retry(db_call_id)
         print(f"[vapi_handlers] Scheduled retry for db_call_id={db_call_id}")
-        return {"handled": True, "type": "call-ended", "action": "retry_scheduled"}
+        return {"handled": True, "type": "end-of-call-report", "action": "retry_scheduled"}
 
-    transcript = ""
-    if msg.artifact:
-        transcript = msg.artifact.get("transcript", "")
-    if not transcript and msg.transcript:
-        transcript = msg.transcript
+    # transcript is a direct top-level field on end-of-call-report messages
+    transcript = msg.transcript or ""
 
     result = qualification.qualify_transcript(transcript, db_call_id)
     print(f"[vapi_handlers] Qualified call {call_id_str}: intent={result.get('intent')}")
-    return {"handled": True, "type": "call-ended", "qualification": result}
+    return {"handled": True, "type": "end-of-call-report", "qualification": result}
 
 
 async def _handle_transcript(msg: VapiMessage) -> dict:
@@ -72,6 +67,13 @@ async def _handle_transcript(msg: VapiMessage) -> dict:
     snippet = (msg.transcript or "")[:80]
     print(f"[vapi_handlers] Handled: transcript for call {call_id_str}: {snippet!r}")
     return {"handled": True, "type": "transcript"}
+
+
+async def _handle_status_update(msg: VapiMessage) -> dict:
+    call_id_str = msg.call.id
+    status = msg.status or "unknown"
+    print(f"[vapi_handlers] Handled: status-update for call {call_id_str}: status={status}")
+    return {"handled": True, "type": "status-update", "status": status}
 
 
 async def _handle_function_call(msg: VapiMessage) -> dict:

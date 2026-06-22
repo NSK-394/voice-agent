@@ -18,10 +18,12 @@ class VapiFunctionCall(BaseModel):
 class VapiMessage(BaseModel):
     type: str
     call: VapiCall
-    transcript: Optional[str] = None
+    transcript: Optional[str] = None      # full transcript on end-of-call-report; partial on transcript events
+    summary: Optional[str] = None         # Vapi's own AI summary, present on end-of-call-report
     functionCall: Optional[VapiFunctionCall] = None
-    endedReason: Optional[str] = None
-    artifact: Optional[dict] = None
+    endedReason: Optional[str] = None     # present on end-of-call-report
+    status: Optional[str] = None          # present on status-update events
+    artifact: Optional[dict] = None       # legacy field, kept for compatibility
 
 class VapiWebhookPayload(BaseModel):
     message: VapiMessage
