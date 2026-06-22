@@ -32,18 +32,20 @@ async def fetch_live_data(query: str) -> dict:
     from config import get_settings
     settings = get_settings()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                _CONTEXT_BASE_URL,
-                params={"q": query},
-                headers={"Authorization": f"Bearer {settings.CONTEXT_DEV_API_KEY}"},
+                "https://api.context.dev/v1/brand/retrieve",
+                params={"domain": query},
+                headers={
+                    "Authorization": f"Bearer {settings.CONTEXT_DEV_API_KEY}",
+                    "Content-Type": "application/json",
+                },
             )
             resp.raise_for_status()
             return resp.json()
     except Exception as exc:
         print(f"[context_tool] fetch_live_data error for query {query!r}: {exc}")
         return {"error": str(exc), "data": None}
-
 
 def get_tool_schema() -> dict:
     return TOOL_SCHEMA
