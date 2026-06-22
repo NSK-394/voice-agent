@@ -4,7 +4,7 @@ from models import VapiMessage
 async def route_event(msg: VapiMessage) -> dict:
     handlers = {
         "call-started":  _handle_call_started,
-        "call-ended":    _handle_call_ended,
+        "end-of-call-report":    _handle_call_ended,
         "transcript":    _handle_transcript,
         "function-call": _handle_function_call,
     }
@@ -13,6 +13,9 @@ async def route_event(msg: VapiMessage) -> dict:
         print(f"[vapi_handlers] Unknown event type: {msg.type}")
         return {"handled": False, "type": msg.type}
     return await handler(msg)
+async def _handle_status_update(msg: VapiMessage) -> dict:
+    print(f"[vapi_handlers] status-update: {msg.call.id}")
+    return {"handled": True, "type": "status-update"}
 
 
 async def _handle_call_started(msg: VapiMessage) -> dict:
