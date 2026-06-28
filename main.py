@@ -86,6 +86,10 @@ async def _fire_vapi_call(client: httpx.AsyncClient, call: dict, settings) -> bo
         resp.raise_for_status()
         print(f"[retry] Fired Vapi call for lead {call['lead_id']} (db_id={call['id']}, client={client_id})")
         return True
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:300] if exc.response else ""
+        print(f"[retry] Vapi call failed for db_id={call['id']}: {exc} | body: {body}")
+        return False
     except httpx.HTTPError as exc:
         print(f"[retry] Vapi call failed for db_id={call['id']}: {exc}")
         return False
