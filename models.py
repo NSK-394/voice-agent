@@ -33,3 +33,14 @@ class LeadIn(BaseModel):
     phone: str
     name: Optional[str] = None
     company: Optional[str] = None
+    client_id: str = "nikhil_test"
+
+class ClientIn(BaseModel):
+    client_id: str
+    business_name: str
+    language: str = "en-IN"
+    system_prompt: str
+    lead_destination_type: Optional[str] = "google_sheet"
+    lead_destination_value: Optional[str] = None
+    direction: str = "outbound"
+    vapi_phone_number_id: Optional[str] = None

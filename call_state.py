@@ -31,6 +31,26 @@ def _connect() -> sqlite3.Connection:
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_status ON calls(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_next_retry_at ON calls(next_retry_at)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            client_id                TEXT PRIMARY KEY,
+            business_name            TEXT NOT NULL,
+            language                 TEXT NOT NULL DEFAULT 'en-IN',
+            system_prompt            TEXT NOT NULL,
+            lead_destination_type    TEXT,
+            lead_destination_value   TEXT,
+            direction                TEXT DEFAULT 'outbound',
+            vapi_phone_number_id     TEXT,
+            active                   INTEGER DEFAULT 1,
+            created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # Safe migrations — idempotent, run on every startup
+    existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(calls)").fetchall()}
+    if "client_id" not in existing_cols:
+        conn.execute("ALTER TABLE calls ADD COLUMN client_id TEXT")
+    if "direction" not in existing_cols:
+        conn.execute("ALTER TABLE calls ADD COLUMN direction TEXT DEFAULT 'outbound'")
     conn.commit()
     return conn
 
@@ -41,12 +61,14 @@ def _delta_iso(hours: float) -> str:
     dt = datetime.now(timezone.utc) + timedelta(hours=hours)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-def create_call(lead_id: str, phone: str) -> int:
+# ── Calls ─────────────────────────────────────────────────────────────────────
+
+def create_call(lead_id: str, phone: str, client_id: str = "nikhil_test") -> int:
     with _lock:
         conn = _connect()
         cur = conn.execute(
-            "INSERT INTO calls (lead_id, phone) VALUES (?, ?)",
-            (lead_id, phone),
+            "INSERT INTO calls (lead_id, phone, client_id) VALUES (?, ?, ?)",
+            (lead_id, phone, client_id),
         )
         conn.commit()
         row_id = cur.lastrowid
@@ -137,3 +159,58 @@ def list_all_calls() -> list[dict]:
         rows = conn.execute("SELECT * FROM calls ORDER BY id DESC").fetchall()
         conn.close()
     return [dict(r) for r in rows]
+
+# ── Clients ───────────────────────────────────────────────────────────────────
+
+def create_client(
+    client_id: str,
+    business_name: str,
+    language: str,
+    system_prompt: str,
+    lead_destination_type: Optional[str],
+    lead_destination_value: Optional[str],
+    direction: str = "outbound",
+    vapi_phone_number_id: Optional[str] = None,
+) -> None:
+    with _lock:
+        conn = _connect()
+        conn.execute(
+            """INSERT INTO clients
+               (client_id, business_name, language, system_prompt,
+                lead_destination_type, lead_destination_value,
+                direction, vapi_phone_number_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (client_id, business_name, language, system_prompt,
+             lead_destination_type, lead_destination_value,
+             direction, vapi_phone_number_id),
+        )
+        conn.commit()
+        conn.close()
+
+def get_client(client_id: str) -> Optional[dict]:
+    with _lock:
+        conn = _connect()
+        row = conn.execute(
+            "SELECT * FROM clients WHERE client_id = ?", (client_id,)
+        ).fetchone()
+        conn.close()
+    return dict(row) if row else None
+
+def list_clients() -> list[dict]:
+    with _lock:
+        conn = _connect()
+        rows = conn.execute(
+            "SELECT * FROM clients ORDER BY created_at DESC"
+        ).fetchall()
+        conn.close()
+    return [dict(r) for r in rows]
+
+def update_client_phone(client_id: str, vapi_phone_number_id: str) -> None:
+    with _lock:
+        conn = _connect()
+        conn.execute(
+            "UPDATE clients SET vapi_phone_number_id = ? WHERE client_id = ?",
+            (vapi_phone_number_id, client_id),
+        )
+        conn.commit()
+        conn.close()

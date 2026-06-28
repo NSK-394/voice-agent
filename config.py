@@ -32,7 +32,6 @@ def get_settings() -> Settings:
         "VAPI_ASSISTANT_ID",
         "OPENAI_API_KEY",
         "CONTEXT_DEV_API_KEY",
-        "GOOGLE_SHEETS_ID",
         "GOOGLE_SERVICE_ACCOUNT_JSON",
     ]
     missing = [k for k in required if not os.environ.get(k)]
@@ -46,7 +45,7 @@ def get_settings() -> Settings:
         VAPI_WEBHOOK_SECRET=os.environ.get("VAPI_WEBHOOK_SECRET", ""),
         OPENAI_API_KEY=os.environ["OPENAI_API_KEY"],
         CONTEXT_DEV_API_KEY=os.environ["CONTEXT_DEV_API_KEY"],
-        GOOGLE_SHEETS_ID=os.environ["GOOGLE_SHEETS_ID"],
+        GOOGLE_SHEETS_ID=os.environ.get("GOOGLE_SHEETS_ID", ""),
         GOOGLE_SERVICE_ACCOUNT_JSON=os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"],
         HOST=os.environ.get("HOST", "0.0.0.0"),
         PORT=int(os.environ.get("PORT", "8000")),
