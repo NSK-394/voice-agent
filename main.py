@@ -101,6 +101,21 @@ async def add_lead(lead: LeadIn) -> dict:
     return leads_module.ingest_lead(lead)
 
 
+@app.post("/fire-pending")
+async def fire_pending() -> dict:
+    from config import get_settings
+    settings = get_settings()
+    pending = call_state.get_pending_initial()
+    triggered = 0
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for call in pending:
+            success = await _fire_vapi_call(client, call, settings)
+            if success:
+                call_state.mark_dialing(call["id"])
+                triggered += 1
+    return {"triggered": triggered, "total_pending": len(pending)}
+
+
 @app.get("/clients")
 async def get_clients() -> list[dict]:
     return call_state.list_clients()

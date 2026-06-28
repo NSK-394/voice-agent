@@ -3,7 +3,7 @@ from models import LeadIn
 
 
 def ingest_lead(lead: LeadIn) -> dict:
-    call_id = call_state.create_call(lead.lead_id, lead.phone)
+    call_id = call_state.create_call(lead.lead_id, lead.phone, lead.client_id)
     return {"call_id": call_id, "lead_id": lead.lead_id, "status": "pending"}
 
 

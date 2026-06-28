@@ -153,6 +153,15 @@ def get_pending_retries() -> list[dict]:
         conn.close()
     return [dict(r) for r in rows]
 
+def get_pending_initial() -> list[dict]:
+    with _lock:
+        conn = _connect()
+        rows = conn.execute(
+            "SELECT * FROM calls WHERE status = 'pending'"
+        ).fetchall()
+        conn.close()
+    return [dict(r) for r in rows]
+
 def list_all_calls() -> list[dict]:
     with _lock:
         conn = _connect()
