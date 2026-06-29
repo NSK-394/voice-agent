@@ -1,3 +1,4 @@
+import json
 import hashlib
 import hmac
 import httpx
@@ -90,9 +91,6 @@ async def _fire_vapi_call(client: httpx.AsyncClient, call: dict, settings) -> bo
         body = exc.response.text[:300] if exc.response else ""
         print(f"[retry] Vapi call failed for db_id={call['id']}: {exc} | body: {body}")
         return False
-    except httpx.HTTPError as exc:
-        print(f"[retry] Vapi call failed for db_id={call['id']}: {exc}")
-        return False
 
 
 @app.get("/leads")
@@ -104,7 +102,87 @@ async def get_leads() -> list[dict]:
 async def add_lead(lead: LeadIn) -> dict:
     return leads_module.ingest_lead(lead)
 from fastapi import Response
+from fastapi import WebSocket, WebSocketDisconnect
 
+@app.websocket("/custom-transcriber")
+async def custom_transcriber(websocket: WebSocket):
+    await websocket.accept()
+    import sarvam_stt
+    from config import get_settings
+    settings = get_settings()
+
+    # Vapi's custom-transcriber handshake carries no call/metadata context,
+    # so client_id must come from the WebSocket URL's query string instead
+    # (set via assistantOverrides.transcriber.server.url with ?client_id=...)
+    client_id = websocket.query_params.get("client_id", "nikhil_test")
+    client = call_state.get_client(client_id)
+    language = client["language"] if client else "en-IN"
+
+    print(f"[custom-transcriber] WebSocket connected: client={client_id} language={language}")
+
+    session = None
+
+    if language == "en-IN":
+        await websocket.close()
+        return
+
+    async def on_transcript(text: str, is_final: bool):
+        response = {
+            "type": "transcriber-response",
+            "transcription": text,
+            "channel": "customer",
+            "transcriptType": "final" if is_final else "partial",
+        }
+        try:
+            await websocket.send_text(json.dumps(response))
+        except Exception as exc:
+            print(f"[custom-transcriber] Failed to send response to Vapi: {exc}")
+
+    try:
+        while True:
+            message = await websocket.receive()
+
+            if message.get("type") == "websocket.disconnect":
+                break
+
+            # First message is JSON "start" handshake (not binary)
+            if "text" in message and message["text"] is not None:
+                try:
+                    start_msg = json.loads(message["text"])
+                except json.JSONDecodeError:
+                    continue
+
+                if start_msg.get("type") == "start":
+                    print(f"[custom-transcriber] start handshake received: {start_msg}")
+                    session = sarvam_stt.SarvamSTTSession(
+                        api_key=settings.SARVAM_API_KEY,
+                        language=language,
+                        on_transcript=on_transcript,
+                    )
+                    await session.connect()
+                    return 
+                    session = sarvam_stt.SarvamSTTSession(
+                        api_key=settings.SARVAM_API_KEY,
+                        language=language,
+                        on_transcript=on_transcript,
+                    )
+                    await session.connect()
+
+            # Binary frames are raw stereo PCM audio
+            elif "bytes" in message and message["bytes"] is not None:
+                if session is None:
+                    continue  # haven't received start handshake yet
+                stereo_pcm = message["bytes"]
+                mono_pcm = sarvam_stt.extract_customer_channel(stereo_pcm)
+                await session.send_audio(mono_pcm)
+
+    except WebSocketDisconnect:
+        print(f"[custom-transcriber] Vapi disconnected (client={client_id})")
+    except Exception as exc:
+        print(f"[custom-transcriber] Unexpected error: {exc}")
+    finally:
+        if session is not None:
+            await session.close()
 @app.post("/custom-tts")
 async def custom_tts(request: Request):
     body = await request.json()
