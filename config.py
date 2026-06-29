@@ -15,6 +15,7 @@ class Settings:
     CONTEXT_DEV_API_KEY: str
     GOOGLE_SHEETS_ID: str
     GOOGLE_SERVICE_ACCOUNT_JSON: str
+    SARVAM_API_KEY: str  # optional, empty string if not set
     HOST: str
     PORT: int
     DB_PATH: Path
@@ -47,6 +48,7 @@ def get_settings() -> Settings:
         CONTEXT_DEV_API_KEY=os.environ["CONTEXT_DEV_API_KEY"],
         GOOGLE_SHEETS_ID=os.environ.get("GOOGLE_SHEETS_ID", ""),
         GOOGLE_SERVICE_ACCOUNT_JSON=os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"],
+        SARVAM_API_KEY=os.environ.get("SARVAM_API_KEY", ""),
         HOST=os.environ.get("HOST", "0.0.0.0"),
         PORT=int(os.environ.get("PORT", "8000")),
         DB_PATH=Path(__file__).resolve().parent / "data" / "voice.db",

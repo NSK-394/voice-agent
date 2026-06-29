@@ -103,7 +103,44 @@ async def get_leads() -> list[dict]:
 @app.post("/leads")
 async def add_lead(lead: LeadIn) -> dict:
     return leads_module.ingest_lead(lead)
+from fastapi import Response
 
+@app.post("/custom-tts")
+async def custom_tts(request: Request):
+    body = await request.json()
+    message = body.get("message", {})
+
+    text = message.get("text", "")
+    sample_rate = message.get("sampleRate", 24000)
+    call_info = message.get("call", {})
+    call_id = call_info.get("id", "")
+
+    # Extract client_id the same way our webhook handler does —
+    # check direct metadata first, fall back to assistantOverrides
+    metadata = call_info.get("metadata", {}) or {}
+    client_id = metadata.get("client_id")
+    if not client_id:
+        overrides = call_info.get("assistantOverrides", {}) or {}
+        client_id = (overrides.get("metadata") or {}).get("client_id", "nikhil_test")
+
+    client = call_state.get_client(client_id)
+    language = client["language"] if client else "en-IN"
+
+    print(f"[custom-tts] call={call_id} client={client_id} language={language} "
+          f"sample_rate={sample_rate} text_len={len(text)}")
+
+    if language == "en-IN":
+        # English stays on Vapi's default pipeline — signal Vapi to fall back
+        return Response(status_code=400, content=b"english_uses_default_voice")
+
+    try:
+        import sarvam_tts
+        pcm_bytes = sarvam_tts.synthesize_raw_pcm(text, language, sample_rate)
+    except Exception as exc:
+        print(f"[custom-tts] FAILED for call={call_id}: {exc}")
+        return Response(status_code=500, content=str(exc).encode())
+
+    return Response(content=pcm_bytes, media_type="application/octet-stream")
 
 @app.post("/fire-pending")
 async def fire_pending() -> dict:
