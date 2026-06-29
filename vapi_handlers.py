@@ -2,18 +2,6 @@ import os
 import call_state
 from models import VapiMessage
 from typing import Optional
-def _extract_client_id(call) -> str:
-    """
-    Phone calls put client_id directly in call.metadata.
-    Web calls (via assistantOverrides) put it in call.assistantOverrides.metadata instead.
-    Check both, falling back to 'nikhil_test'.
-    """
-    cid = (call.metadata or {}).get("client_id")
-    if cid:
-        return cid
-    overrides = call.assistantOverrides or {}
-    cid = (overrides.get("metadata") or {}).get("client_id")
-    return cid or "nikhil_test"
 
 def _extract_client_id(call) -> str:
     cid = (call.metadata or {}).get("client_id")
