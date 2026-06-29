@@ -10,7 +10,8 @@ class VapiCall(BaseModel):
     id: str
     customer: dict = {}
     metadata: dict = {}
-
+    assistantOverrides: dict = {}
+    phoneNumberId: Optional[str] = None
 class VapiFunctionCall(BaseModel):
     name: str
     parameters: dict = {}

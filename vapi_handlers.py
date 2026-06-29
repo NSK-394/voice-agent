@@ -2,6 +2,26 @@ import os
 import call_state
 from models import VapiMessage
 from typing import Optional
+def _extract_client_id(call) -> str:
+    """
+    Phone calls put client_id directly in call.metadata.
+    Web calls (via assistantOverrides) put it in call.assistantOverrides.metadata instead.
+    Check both, falling back to 'nikhil_test'.
+    """
+    cid = (call.metadata or {}).get("client_id")
+    if cid:
+        return cid
+    overrides = call.assistantOverrides or {}
+    cid = (overrides.get("metadata") or {}).get("client_id")
+    return cid or "nikhil_test"
+
+def _extract_client_id(call) -> str:
+    cid = (call.metadata or {}).get("client_id")
+    if cid:
+        return cid
+    overrides = call.assistantOverrides or {}
+    cid = (overrides.get("metadata") or {}).get("client_id")
+    return cid or "nikhil_test"
 
 async def route_event(msg: VapiMessage) -> dict:
     handlers = {
@@ -22,7 +42,7 @@ async def _handle_call_started(msg: VapiMessage) -> dict:
     call_id_str = msg.call.id
     lead_id = msg.call.metadata.get("lead_id", "unknown")
     phone = msg.call.customer.get("number", "")
-    client_id = msg.call.metadata.get("client_id", "nikhil_test")
+    client_id = _extract_client_id(msg.call)
 
     existing_call_id = msg.call.metadata.get("db_call_id")
     if existing_call_id:
@@ -43,7 +63,7 @@ async def _handle_end_of_call_report(msg: VapiMessage) -> dict:
 
     call_id_str = msg.call.id
     db_call_id = msg.call.metadata.get("db_call_id")
-    client_id = msg.call.metadata.get("client_id", "nikhil_test")
+    client_id = _extract_client_id(msg.call)
     ended_reason = msg.endedReason or ""
 
     print(f"[vapi_handlers] Handled: end-of-call-report for call {call_id_str}, "
